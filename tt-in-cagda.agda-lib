@@ -1,0 +1,3 @@
+name: tt-in-cagda
+include: src
+depend: cubical
