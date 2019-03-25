@@ -215,22 +215,24 @@ unlamʳ y = apʳ (sub wkn y) (var zero)
 -- the list structure on ~> behaves as one would expect:
 
 ε*-η : ∀ (f : [ k ] ε ~> Δ) → f ≡ ε*
-ε*-η f = ~>Ext t'
-  where t' : ∀ τ i → f τ i ≡ ε* τ i
-        t' τ ()
+ε*-η f = ~>Ext (λ τ ())
 
 ,*-η : ∀ (f : [ k ] (Γ , τ) ~> Δ) → (tail* f ,* head* f) ≡ f
-,*-η f = ~>Ext t'
-  where t' : ∀ τ i → (tail* f ,* head* f) τ i ≡ f τ i
-        t' τ zero = refl
-        t' τ (suc i) = refl
+,*-η f = ~>Ext (λ { τ zero    → refl
+                  ; τ (suc i) → refl } )
+
+head*-,* : ∀ (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Δ) → head* (f ,* x) ≡ x
+head*-,* f x = refl
+
+tail*-,* : ∀ (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Δ) → tail* (f ,* x) ≡ f
+tail*-,* f x = ~>Ext (λ τ i → refl)
+
+-- _,*_ is a natural transformation
 
 ∘*-,* : ∀ (g : [ k ] Δ ~> Ε) (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Δ)
         → g ∘* (f ,* x) ≡ (g ∘* f) ,* (sub g x)
-∘*-,* g f x = ~>Ext t'
-  where t' : ∀ τ i → (g ∘* (f ,* x)) τ i ≡ ((g ∘* f) ,* (sub g x)) τ i
-        t' τ zero = refl
-        t' τ (suc i) = refl
+∘*-,* g f x = ~>Ext (λ { τ zero    → refl
+                       ; τ (suc i) → refl } )
 
 -- the categorial structure on ~> behaves as one would expect -- using the sub laws from _⊣_!
 
@@ -240,9 +242,9 @@ id*-l f = ~>Ext (λ τ i → sub-id* (f τ i))
 id*-r : ∀ (f : [ k ] Γ ~> Δ) → f ∘* id* ≡ f
 id*-r f = ~>Ext (λ τ i → sub-var f i)
 
-assoc : ∀ (h : [ k ] Ε ~> Ζ) (g : [ k ] Δ ~> Ε) (f : [ k ] Γ ~> Δ)
-        → (h ∘* g) ∘* f ≡ h ∘* (g ∘* f)
-assoc h g f = ~>Ext (λ τ i → sub-∘* h g (f τ i))
+∘*-assoc : ∀ (h : [ k ] Ε ~> Ζ) (g : [ k ] Δ ~> Ε) (f : [ k ] Γ ~> Δ)
+           → (h ∘* g) ∘* f ≡ h ∘* (g ∘* f)
+∘*-assoc h g f = ~>Ext (λ τ i → sub-∘* h g (f τ i))
 
 -- Some more facts:
 
@@ -252,7 +254,7 @@ assoc h g f = ~>Ext (λ τ i → sub-∘* h g (f τ i))
 ⟨⟩-↑ : ∀ (x : [ k ] τ ⊣ Δ) (f : [ k ] Γ ~> Δ) → ⟨ x ⟩ ∘* (↑ f) ≡ f ,* x
 ⟨⟩-↑ x f =  (id* ,* x) ∘* ((wkn ∘* f) ,* var zero)                  ≡⟨ ∘*-,* (id* ,* x) (wkn ∘* f) (var zero) ⟩
           ((id* ,* x) ∘* (wkn ∘* f)) ,* sub (id* ,* x) (var zero)  ≡⟨ cong (((id* ,* x) ∘* (wkn ∘* f)) ,*_) (sub-var (id* ,* x) zero) ⟩
-          ((id* ,* x) ∘* (wkn ∘* f)) ,* x                          ≡⟨ cong (_,* x) (sym (assoc (id* ,* x) wkn f)) ⟩
+          ((id* ,* x) ∘* (wkn ∘* f)) ,* x                          ≡⟨ cong (_,* x) (sym (∘*-assoc (id* ,* x) wkn f)) ⟩
           (((id* ,* x) ∘* wkn) ∘* f) ,* x                          ≡⟨ cong (λ z → (z ∘* f) ,* x) (,*-wkn id* (x)) ⟩
                           (id* ∘* f) ,* x                          ≡⟨ cong (_,* x) (id*-l f) ⟩
                                    f ,* x                          ∎
