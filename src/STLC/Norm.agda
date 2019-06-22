@@ -8,15 +8,16 @@
 {-# OPTIONS --cubical --safe #-}
 module STLC.Norm where
 
-open import Cubical.Core.Everything renaming (_,_ to <_,_>)
+open import Cubical.Foundations.Prelude renaming (_,_ to <_,_>)
 open import Cubical.Foundations.Function
+open import Cubical.Foundations.BiInvEquiv
 open import Cubical.Foundations.Isomorphism
 
 open import Cubical.Data.Nat
 open import Cubical.Data.Sum
 open import Cubical.Data.Unit renaming (Unit to ⊤)
 open import Cubical.Data.Empty
-open import Cubical.Data.Bool
+open import Cubical.Data.Bool hiding (_or_)
 
 _or_ : Bool → Bool → Bool
 true  or _ = true
@@ -31,11 +32,6 @@ isFalse : Bool → Set
 isFalse true = ⊥
 isFalse false = ⊤
 
-⊎-elim : ∀ {ℓp ℓq ℓr} {P : Set ℓp} {Q : Set ℓq} {R : Set ℓr} → (P → R) → (Q → R) → P ⊎ Q → R
-⊎-elim f _ (inl x) = f x
-⊎-elim _ f (inr x) = f x
-
-open import Foundations.BiinvertibleEquiv
 open import STLC.Base
 
 
@@ -47,7 +43,7 @@ open import STLC.Base
 -- We will mutually inductively define:
 
 -- The type of judements x : normal τ ⊣ Γ ("x of type τ in context Γ is in normal form")
-data normal_⊣_ : Type → Ctx → Set
+data normal_⊣_ : Typ → Ctx → Set
 
 -- A few predicates as to when β/η/recNat reductions cannot be applied
 lam-β-irred : (normal (σ ⇒ τ) ⊣ Γ) → Set
@@ -116,7 +112,7 @@ Nat-val : (n : normal Nat ⊣ ε) → (n ≡ zero) ⊎ Σ (normal Nat ⊣ ε) (�
 ⇒-val (lam x pf) = < < x , pf > , refl >
 ⇒-val (ap y z pf) = ⊥-elim (subst lam-β-irred (snd (⇒-val y)) pf)
 ⇒-val (recNat z s n pf)
-  = ⊥-elim (⊎-elim (λ p → subst recNat-β-irred p pf)
+  = ⊥-elim (elim-⊎ (λ p → subst recNat-β-irred p pf)
                    (λ p → subst recNat-β-irred (snd p) pf) (Nat-val n))
 
 Nat-val (var ())
@@ -124,7 +120,7 @@ Nat-val (ap y z pf) = ⊥-elim (subst lam-β-irred (snd (⇒-val y)) pf)
 Nat-val zero = inl refl
 Nat-val (suc n) = inr < n , refl >
 Nat-val (recNat z s n pf)
-  = ⊥-elim (⊎-elim (λ p → subst recNat-β-irred p pf)
+  = ⊥-elim (elim-⊎ (λ p → subst recNat-β-irred p pf)
                    (λ p → subst recNat-β-irred (snd p) pf) (Nat-val n))
 
 -- lam defines an equivalence:
@@ -309,5 +305,3 @@ recNatNorm z s (recNat z' s' n' pf) = recNat z s (recNat z' s' n' pf) tt
 --             (u : ∀ i → Partial φ A)
 --             (u0 : A [ φ ↦ u i0 ]) → Σ A (outS u0 ≡_)
 -- hfillPair {φ = φ} u u0 = < (hfill u u0 i1) , (λ j → hfill u u0 j) >
-
-

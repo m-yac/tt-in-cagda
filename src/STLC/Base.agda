@@ -1,7 +1,7 @@
 
 ----------------------------------------------------------------------------
 --
--- A higher inductive type for a simply typed lambda caculus
+-- A higher inductive type for a simply typed lambda calculus
 -- 
 -- Inspired by: Type Theory in Type Theory using Quotient Inductive Types
 --              by Thorsten Altenkirch and Ambrus Kaposi
@@ -12,14 +12,13 @@
 {-# OPTIONS --cubical --safe #-}
 module STLC.Base where
 
-open import Cubical.Core.Everything renaming (_,_ to <_,_>)
+open import Cubical.Foundations.Prelude renaming (_,_ to <_,_>)
 open import Cubical.Foundations.Function
+open import Cubical.Foundations.BiInvEquiv
 
-_≡⟨⟩_ : ∀ {ℓ} {A : Set ℓ} {z : A} (x : A) → x ≡ z → x ≡ z
+_≡⟨⟩_ : ∀ {ℓ} {A : Type ℓ} {z : A} (x : A) → x ≡ z → x ≡ z
 _ ≡⟨⟩ eq = eq
 infixr 2 _≡⟨⟩_
-
-open import Foundations.BiinvertibleEquiv
 
 infixl 6 _,_ _,*_
 infixr 7 _∘*_
@@ -33,7 +32,7 @@ infixr 3 ↑_
 
 -- (Total terms are those which step to a value in finite time, while partial terms may not.
 --  Thus, the thing which is total/partial here is the evaluation function!)
-data Totality : Set where
+data Totality : Type₀ where
   Total : Totality
   Partl : Totality
 
@@ -41,30 +40,30 @@ data Totality : Set where
 -- We will mutually inductively define:
 
 -- The type of contexts
-data Ctx : Set
+data Ctx : Type₀
 
 -- The type of transformations / generalized substitutions from a context Γ to Δ
-[_]_~>_ : Totality → Ctx → Ctx → Set
+[_]_~>_ : Totality → Ctx → Ctx → Type₀
 
-total_~>_ : Ctx → Ctx → Set
+total_~>_ : Ctx → Ctx → Type₀
 total_~>_ = [ Total ]_~>_
-_~>_ : Ctx → Ctx → Set
+_~>_ : Ctx → Ctx → Type₀
 _~>_ = [ Partl ]_~>_
 
--- The type of types
-data Type : Set
+-- The type of (STLC) types
+data Typ : Type₀
 
 -- The type of judgements x : τ ⊣ Γ ("x has type τ in context Γ")
-data [_]_⊣_ : Totality → Type → Ctx → Set
+data [_]_⊣_ : Totality → Typ → Ctx → Type₀
 
-total_⊣_ : Type → Ctx → Set
+total_⊣_ : Typ → Ctx → Type₀
 total_⊣_ = [ Total ]_⊣_
-_⊣_ : Type → Ctx → Set
+_⊣_ : Typ → Ctx → Type₀
 _⊣_ = [ Partl ]_⊣_
 
 variable
   Γ Δ Ε Ζ : Ctx
-  τ σ ρ : Type
+  τ σ ρ : Typ
   x y z : τ ⊣ Γ
   k : Totality
 
@@ -76,18 +75,18 @@ variable
 
 data Ctx where
   ε : Ctx
-  _,_ : Ctx → Type → Ctx
+  _,_ : Ctx → Typ → Ctx
 
 append : Ctx → Ctx → Ctx
 append Γ ε = Γ
 append Γ (Δ , x) = append Γ Δ , x
 
 -- A proof that a type is in a context is an index at which it appears
-data _∈_ : Type → Ctx → Set where
+data _∈_ : Typ → Ctx → Type₀ where
   zero : τ ∈ (Γ , τ)
   suc  : τ ∈ Γ → τ ∈ (Γ , σ)
 
-∈-Rec : ∀ {ℓ} (P : ∀ τ Γ → Set ℓ)
+∈-Rec : ∀ {ℓ} (P : ∀ τ Γ → Type ℓ)
         → (∀ {τ Γ} → P τ (Γ , τ))
         → (∀ {σ τ Γ} → P τ Γ → P τ (Γ , σ))
         → ∀ {τ Γ} → τ ∈ Γ → P τ Γ
@@ -138,12 +137,12 @@ wkn = tail* id*
 
 
 --------------------
--- Types and Terms
+-- Typs and Terms
 --------------------
 
-data Type where
-  _⇒_ : Type → Type → Type
-  Nat : Type
+data Typ where
+  _⇒_ : Typ → Typ → Typ
+  Nat : Typ
 
 -- ...
 unlamʳ unlamˡ : (f : [ k ] (σ ⇒ τ) ⊣ Γ) → [ k ] τ ⊣ (Γ , σ)
@@ -152,7 +151,7 @@ unlamʳ unlamˡ : (f : [ k ] (σ ⇒ τ) ⊣ Γ) → [ k ] τ ⊣ (Γ , σ)
 
 data [_]_⊣_ where
 
-  -- permit arbitrary substutions on contexts
+  -- permit arbitrary substutions on contexts (explicit substitution)
   sub : (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Γ) → [ k ] τ ⊣ Δ
 
   -- sub is a functor on (~>, id*, ∘*)
@@ -297,13 +296,13 @@ unlam-ηʳ = lam-ηʳ
 
 
 -- lam with unlamˡ and unlamʳ define a bi-invertible equivalence:
-lam-biinvequiv : BiinvEquiv ([ k ] τ ⊣ (Γ , σ)) ([ k ] (σ ⇒ τ) ⊣ Γ)
+lam-biinvequiv : BiInvEquiv ([ k ] τ ⊣ (Γ , σ)) ([ k ] (σ ⇒ τ) ⊣ Γ)
 lam-biinvequiv = record { fun = lam ; invr = unlamʳ ; invr-rightInv = unlam-ηʳ
                                     ; invl = unlamˡ ; invl-leftInv  = unlam-βˡ }
 
 -- ...thus:
 unlam-uniq : ∀ (y : [ k ] (σ ⇒ τ) ⊣ Γ) → unlamʳ y ≡ unlamˡ y
-unlam-uniq = BiinvEquiv.invr≡invl lam-biinvequiv
+unlam-uniq = BiInvEquiv.invr≡invl lam-biinvequiv
 
 -- ...and therefore our ap's are indistinguishable!
 ap-uniq : ∀ (y : [ k ] (σ ⇒ τ) ⊣ Γ) (z : [ k ] σ ⊣ Γ) → apˡ y z ≡ apʳ y z
