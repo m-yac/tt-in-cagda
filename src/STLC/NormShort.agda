@@ -1,12 +1,12 @@
 
----------------------------------------------------------
+-----------------------------------------------------------------
 --
--- Normalization and evaluation for STLC, along with...
+-- η-short Normalization and evaluation for STLC, along with...
 --
----------------------------------------------------------
+-----------------------------------------------------------------
 
 {-# OPTIONS --cubical --safe #-}
-module STLC.Norm where
+module STLC.NormShort where
 
 open import Cubical.Foundations.Prelude renaming (_,_ to <_,_>)
 open import Cubical.Foundations.Function
@@ -32,6 +32,41 @@ isFalse : Bool → Set
 isFalse true = ⊥
 isFalse false = ⊤
 
+orˡ : ∀ {l r : Bool} → isTrue l → isTrue (l or r)
+orˡ {true} {r} tt = tt
+orˡ {false} {_} ()
+
+orʳ : ∀ {l r : Bool} → isTrue r → isTrue (l or r)
+orʳ {false} {true} tt = tt
+orʳ {true } {true} tt = tt
+orʳ {_} {false} ()
+
+mapʳ : ∀ {ℓp ℓq ℓr} {P : Set ℓp} {Q : Set ℓq} {R : Set ℓr} → (Q → R) → P ⊎ Q → P ⊎ R
+mapʳ f (inl x) = inl x
+mapʳ f (inr x) = inr (f x)
+
+data Maybe {ℓ} (A : Set ℓ) : Set ℓ where
+  yes : A → Maybe A
+  no  : Maybe A
+
+caseMaybe : ∀ {ℓ} {A : Set ℓ} {ℓ'} (P : Maybe A → Set ℓ') → (∀ a → P (yes a)) → P no → ∀ x → P x
+caseMaybe P y _ (yes x) = y x
+caseMaybe P _ n no = n
+
+is-yes is-no : ∀ {ℓ} {A : Set ℓ} → Maybe A → Bool
+is-yes = caseMaybe _ (λ _ → true) false
+is-no  = caseMaybe _ (λ _ → false) true
+
+map : ∀ {ℓ ℓ'} {A : Set ℓ} {B : Set ℓ'} → (A → B) → Maybe A → Maybe B
+map f x = caseMaybe _ (yes ∘ f) no x
+
+_>>=_ : ∀ {ℓ} {A B : Set ℓ} → Maybe A → (A → Maybe B) → Maybe B
+x >>= f = caseMaybe _ f no x
+
+decide : (b : Bool) → Maybe (isTrue b)
+decide true = yes tt
+decide false = no
+
 open import STLC.Base
 
 
@@ -46,10 +81,10 @@ open import STLC.Base
 data normal_⊣_ : Typ → Ctx → Set
 
 -- A few predicates as to when β/η/recNat reductions cannot be applied
-lam-β-irred : (normal (σ ⇒ τ) ⊣ Γ) → Set
-lam-η-irred : (normal τ ⊣ Γ) → Set
-recNat-β-irred : (normal Nat ⊣ Γ) → Set
-_freeIn_ : (i : σ ∈ Γ) (x : normal τ ⊣ Γ) → Bool
+lam-β-irred : (normal (σ ⇒ τ) ⊣ Γ) → Bool
+lam-η-irred : (normal τ ⊣ Γ) → Bool
+recNat-β-irred : (normal Nat ⊣ Γ) → Bool
+_freeIn_ : (i : τ ∈ Γ) → (x : normal σ ⊣ Γ) → Bool
 
 
 data normal_⊣_ where
@@ -58,10 +93,10 @@ data normal_⊣_ where
   var : (i : τ ∈ Γ) → normal τ ⊣ Γ
 
   -- (lam x) is in normal form only if x ≢ unlam y for some y (i.e. lam-η cannot be applied)
-  lam : (x : normal τ ⊣ (Γ , σ)) (pf : lam-η-irred x) → normal (σ ⇒ τ) ⊣ Γ
+  lam : (x : normal τ ⊣ (Γ , σ)) (pf : isTrue (lam-η-irred x)) → normal (σ ⇒ τ) ⊣ Γ
 
   -- (ap y z) is in normal form only if y ≢ lam x for some x (i.e. lam-β cannot be applied)
-  ap  : (y : normal (σ ⇒ τ) ⊣ Γ) (z : normal σ ⊣ Γ) (pf : lam-β-irred y) → normal τ ⊣ Γ
+  ap  : (y : normal (σ ⇒ τ) ⊣ Γ) (z : normal σ ⊣ Γ) (pf : isTrue (lam-β-irred y)) → normal τ ⊣ Γ
 
   zero : normal Nat ⊣ Γ
   suc  : (n : normal Nat ⊣ Γ) → normal Nat ⊣ Γ
@@ -69,27 +104,32 @@ data normal_⊣_ where
   -- (recNat τ z s n) is in normal form only if n ≢ zero (i.e. recNat-zero cannot be applied)
   --                                        and n ≢ suc n (i.e. recNat-suc cannot be applied)
   recNat : (z : normal τ ⊣ Γ) (s : normal τ ⊣ (Γ , Nat , τ)) (n : normal Nat ⊣ Γ)
-           (pf : recNat-β-irred n) → normal τ ⊣ Γ
+           (pf : isTrue (recNat-β-irred n)) → normal τ ⊣ Γ
 
 
--- uninhabited iff y ≡ lam x for some x
-lam-β-irred (lam x _) = ⊥
-lam-β-irred _ = ⊤
+lam-β-irred (lam x _) = false
+lam-β-irred _ = true
 
--- uninhabited iff x ≡ unlam y (≡ ap (sub wkn y) (var zero)) for some y
-lam-η-irred (ap y (var zero) _) = isTrue (zero freeIn y)
-lam-η-irred _ = ⊤
+lam-η-irred (ap y (var zero) _) = zero freeIn y -- is-yes (strengthen ε y)
+lam-η-irred _ = true
 
--- uninhabited iff n ≡ zero or n ≡ suc n' for some n'
-recNat-β-irred zero = ⊥
-recNat-β-irred (suc _) = ⊥
-recNat-β-irred _ = ⊤
+recNat-β-irred zero = false
+recNat-β-irred (suc _) = false
+recNat-β-irred _ = true
 
--- inhabited iff (var i) appears somewhere in x
-zero freeIn (var zero) = true
-zero freeIn (var (suc _)) = false
-(suc _) freeIn (var zero) = false
-(suc i) freeIn (var (suc j)) = i freeIn (var j)
+-- lam-β-irred    x = isFalse (is-lam x)
+-- lam-η-irred    x = isFalse (is-unlam x)
+-- recNat-β-irred x = isFalse (is-canonNat x)
+
+
+
+_≡?_ : (i : τ ∈ Γ) (j : σ ∈ Δ) → Bool
+zero ≡? zero = true
+zero ≡? suc _ = false
+suc _ ≡? zero = false
+suc i ≡? suc j = i ≡? j
+
+i freeIn (var j) = i ≡? j
 i freeIn (lam x _) = (suc i) freeIn x
 i freeIn (ap y z _) = i freeIn y or i freeIn z
 i freeIn zero = false
@@ -103,30 +143,30 @@ i freeIn (recNat z s n _) = i freeIn z or (suc (suc i)) freeIn s or i freeIn n
 -----------
 
 -- every y : normal (σ ⇒ τ) ⊣ ε satisfies y ≡ lam x pf for some < x , pf >
-⇒-val : (y : normal (σ ⇒ τ) ⊣ ε) → Σ (Σ (normal τ ⊣ (ε , σ)) lam-η-irred) (λ p → y ≡ lam (fst p) (snd p))
+⇒-val : (y : normal (σ ⇒ τ) ⊣ ε) → Σ (Σ (normal τ ⊣ (ε , σ)) (isTrue ∘ lam-η-irred)) (λ p → y ≡ lam (fst p) (snd p))
 
 -- every n : Nat ⊣ ε satisfies either n ≡ zero or n ≡ suc m for some m
 Nat-val : (n : normal Nat ⊣ ε) → (n ≡ zero) ⊎ Σ (normal Nat ⊣ ε) (λ m → n ≡ suc m)
 
 ⇒-val (var ())
 ⇒-val (lam x pf) = < < x , pf > , refl >
-⇒-val (ap y z pf) = ⊥-elim (subst lam-β-irred (snd (⇒-val y)) pf)
+⇒-val (ap y z pf) = ⊥-elim (subst (isTrue ∘ lam-β-irred) (snd (⇒-val y)) pf)
 ⇒-val (recNat z s n pf)
-  = ⊥-elim (elim-⊎ (λ p → subst recNat-β-irred p pf)
-                   (λ p → subst recNat-β-irred (snd p) pf) (Nat-val n))
+  = ⊥-elim (elim-⊎ (λ p → subst (isTrue ∘ recNat-β-irred) p pf)
+                   (λ p → subst (isTrue ∘ recNat-β-irred) (snd p) pf) (Nat-val n))
 
 Nat-val (var ())
-Nat-val (ap y z pf) = ⊥-elim (subst lam-β-irred (snd (⇒-val y)) pf)
+Nat-val (ap y z pf) = ⊥-elim (subst (isTrue ∘ lam-β-irred) (snd (⇒-val y)) pf)
 Nat-val zero = inl refl
 Nat-val (suc n) = inr < n , refl >
 Nat-val (recNat z s n pf)
-  = ⊥-elim (elim-⊎ (λ p → subst recNat-β-irred p pf)
-                   (λ p → subst recNat-β-irred (snd p) pf) (Nat-val n))
+  = ⊥-elim (elim-⊎ (λ p → subst (isTrue ∘ recNat-β-irred) p pf)
+                   (λ p → subst (isTrue ∘ recNat-β-irred) (snd p) pf) (Nat-val n))
 
 -- lam defines an equivalence:
-⇒-val≡ : (normal (σ ⇒ τ) ⊣ ε) ≡ (Σ (normal τ ⊣ (ε , σ)) lam-η-irred)
+⇒-val≡ : (normal (σ ⇒ τ) ⊣ ε) ≡ (Σ (normal τ ⊣ (ε , σ)) (isTrue ∘ lam-η-irred))
 ⇒-val≡ = isoToPath ⇒-valIso
-  where ⇒-valIso : Iso (normal (σ ⇒ τ) ⊣ ε) (Σ (normal τ ⊣ (ε , σ)) lam-η-irred)
+  where ⇒-valIso : Iso (normal (σ ⇒ τ) ⊣ ε) (Σ (normal τ ⊣ (ε , σ)) (isTrue ∘ lam-η-irred))
         Iso.fun ⇒-valIso x = fst (⇒-val x)
         Iso.inv ⇒-valIso p = lam (fst p) (snd p)
         Iso.rightInv ⇒-valIso p = refl
@@ -134,6 +174,51 @@ Nat-val (recNat z s n pf)
 
 -- by the universal property of ℕ, we also have an equivalence:
 -- ...
+
+
+
+------------------
+-- Strengthening
+------------------
+
+remove : (Γ : Ctx) → (i : τ ∈ Γ) → Ctx
+remove (Γ , τ) zero = Γ
+remove (Γ , τ) (suc i) = remove Γ i , τ
+
+-- strengthen-lam :
+-- strengthen-ap :
+-- strengthen-suc :
+-- strengthen-recNat : 
+
+strengthen : ∀ (x : normal τ ⊣ Γ) (i : σ ∈ Γ) → (isTrue (i freeIn x)) ⊎ (normal τ ⊣ (remove Γ i))
+
+-- strengthen-lam-β : ∀ (y : normal (σ ⇒ τ) ⊣ Γ) (i : ρ ∈ Γ) → isTrue (lam-β-irred y) →
+-- strengthen-lam-η : ∀ (x : normal τ ⊣ (Γ , σ)) (i : ρ ∈ Γ) → isTrue (lam-η-irred x) →
+-- strengthen-recNat-β : ∀ (n : normal Nat ⊣ Γ) (i : ρ ∈ Γ) → isTrue (recNat-β-irred n) → 
+
+strengthen (var j) i =  mapʳ var (go i j)
+  where go : ∀ (i : σ ∈ Γ) (j : τ ∈ Γ) → isTrue (i freeIn (var j)) ⊎ (τ ∈ remove Γ i)
+        go zero zero = inl tt
+        go zero (suc j) = inr j
+        go (suc i) zero = inr zero
+        go (suc i) (suc j) = mapʳ suc (go i j)
+strengthen (lam x pf) i with strengthen x (suc i)
+... | inr x' = inr (lam x' {!!})
+... | inl pf' = inl pf'
+strengthen (ap y z pf) i with strengthen y i | strengthen z i
+... | inr y' | inr z' = inr (ap y' z' {!!})
+... | inr _ | inl pf' = inl (orʳ pf')
+... | inl pf' | _     = inl (orˡ pf')
+strengthen zero _ = inr zero
+strengthen (suc n) i with strengthen n i
+... | inr n' = inr (suc n')
+... | inl pf = inl pf
+strengthen (recNat z s n pf) i with strengthen z i | strengthen s (suc (suc i)) | strengthen n i
+... | inr z' | inr s' | inr n' = inr (recNat z' s' n' {!!})
+... | inr _ | inr _ | inl pf'  = inl (orʳ pf')
+... | inr _ | inl pf' | _      = inl (orˡ {l = (_ freeIn z) or (_ freeIn s)} (orʳ pf'))
+... | inl pf' | _ | _          = inl (orˡ {l = (_ freeIn z) or (_ freeIn s)} (orˡ pf'))
+
 
 
 
@@ -154,8 +239,9 @@ norm : total τ ⊣ Γ → normal τ ⊣ Γ
 norm x = {!!}
 
 
+
 lamNorm : (x : normal τ ⊣ (Γ , σ)) → normal (σ ⇒ τ) ⊣ Γ
-lamNorm (ap y (var zero) pf) = {!!}
+lamNorm (ap y (var zero) pf) = elim-⊎ (λ pf' → lam (ap y (var zero) pf) pf') (λ y' → y') (strengthen y zero)
 -- the rest are trivial
 lamNorm (ap y (var (suc i)) pf) = lam (ap y (var (suc i)) pf) tt
 lamNorm (ap y (lam x pf') pf) = lam (ap y (lam x pf') pf) tt
@@ -170,7 +256,7 @@ lamNorm (suc x) = lam (suc x) tt
 lamNorm (recNat z s n pf) = lam (recNat z s n pf) tt
 
 apNorm : (y : normal (σ ⇒ τ) ⊣ Γ) (z : normal σ ⊣ Γ) → normal τ ⊣ Γ
-apNorm (lam y _) z = {!!}
+apNorm (lam y pf) z = {!!}
 -- the rest are trivial
 apNorm (var i) z = ap (var i) z tt
 apNorm (ap y z' pf) z = ap (ap y z' pf) z tt
@@ -185,6 +271,35 @@ recNatNorm z s (ap y z' pf) = recNat z s (ap y z' pf) tt
 recNatNorm z s (recNat z' s' n' pf) = recNat z s (recNat z' s' n' pf) tt
 
 
+
+
+
+
+
+-- strengthen : ∀ Δ → (x : normal τ ⊣ (append (Γ , σ) Δ)) → Maybe (normal τ ⊣ (append Γ Δ))
+-- strengthen Δ (var i) = map var (rhs Δ i)
+--   where rhs : ∀ Δ (i : τ ∈ (append (Γ , σ) Δ)) → Maybe (τ ∈ (append Γ Δ))
+--         rhs ε zero = no
+--         rhs ε (suc i) = yes i
+--         rhs (Δ , τ) zero = yes zero
+--         rhs (Δ , τ) (suc i) = map suc (rhs Δ i)
+-- strengthen Δ (lam x pf) = do
+--   x' <- strengthen (Δ , _) x
+--   pf' <- decide (lam-η-irred x')
+--   yes (lam x' pf')
+-- strengthen Δ (ap y z pf) = do
+--   y'  <- strengthen Δ y
+--   z'  <- strengthen Δ z
+--   pf' <- decide (lam-β-irred y')
+--   yes (ap y' z' pf')
+-- strengthen Δ zero = yes zero
+-- strengthen Δ (suc n) = map suc (strengthen Δ n)
+-- strengthen Δ (recNat z s n pf) = do
+--   z'  <- strengthen Δ z
+--   s'  <- strengthen (Δ , _ , _) s
+--   n'  <- strengthen Δ n
+--   pf' <- decide (recNat-β-irred n')
+--   yes (recNat z' s' n' pf')
 
 
 
@@ -305,3 +420,5 @@ recNatNorm z s (recNat z' s' n' pf) = recNat z s (recNat z' s' n' pf) tt
 --             (u : ∀ i → Partial φ A)
 --             (u0 : A [ φ ↦ u i0 ]) → Σ A (outS u0 ≡_)
 -- hfillPair {φ = φ} u u0 = < (hfill u u0 i1) , (λ j → hfill u u0 j) >
+
+
