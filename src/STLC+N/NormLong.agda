@@ -6,14 +6,14 @@
 ---------------------------------------------------------
 
 {-# OPTIONS --cubical #-}
-module STLC.NormLong where
+module STLC+N.NormLong where
 
 open import Cubical.Foundations.Prelude renaming (_,_ to <_,_>)
 open import Cubical.Foundations.Function
 open import Cubical.Foundations.BiInvEquiv
 open import Cubical.Foundations.Isomorphism
 
-open import STLC.Base
+open import STLC+N.Base
 
 
 
@@ -130,8 +130,8 @@ reify {Nat} x = x
 infixr 3 ⟦↑⟧_
 
 
-⟦_⟧  : (x : total τ ⊣ Γ) → ∀ {Δ} (e : Γ ⟦~>⟧ Δ) → τ ⟦⊣⟧ Δ
-⟦_⟧* : (f : total Γ ~> Ε) → ∀ {Δ} (e : Ε ⟦~>⟧ Δ) → Γ ⟦~>⟧ Δ
+⟦_⟧  : (x : τ ⊣ Γ) → ∀ {Δ} (e : Γ ⟦~>⟧ Δ) → τ ⟦⊣⟧ Δ
+⟦_⟧* : (f : Γ ~> Ε) → ∀ {Δ} (e : Ε ⟦~>⟧ Δ) → Γ ⟦~>⟧ Δ
 
 ⟦recNat⟧ : (∀ {Δ} (e : Γ ⟦~>⟧ Δ) → τ ⟦⊣⟧ Δ) → (∀ {Δ} (e : (Γ , Nat , τ) ⟦~>⟧ Δ) → τ ⟦⊣⟧ Δ) → Nat ⟦⊣⟧ Δ → (Γ ⟦~>⟧ Δ) → τ ⟦⊣⟧ Δ
 ⟦recNat⟧ ⟦z⟧ ⟦s⟧ zero    e = ⟦z⟧ e
@@ -171,10 +171,10 @@ infixr 3 ⟦↑⟧_
 ⟦ f ⟧* e = λ τ i → ⟦ f τ i ⟧ e
 
 
-norm : total τ ⊣ Γ → normal τ ⊣ Γ
+norm : τ ⊣ Γ → normal τ ⊣ Γ
 norm x = reify (⟦ x ⟧ ⟦id*⟧)
 
-emb : ∀ {t} → [ t ]-normal τ ⊣ Γ → total τ ⊣ Γ
+emb : ∀ {t} → [ t ]-normal τ ⊣ Γ → τ ⊣ Γ
 emb (var i) = var i
 emb (ap y z) = apˡ (emb y) (emb z)
 emb (recNat z s n) = recNat (emb z) (emb s) (emb n)

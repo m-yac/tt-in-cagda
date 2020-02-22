@@ -10,12 +10,14 @@ This work was inspired by [Type Theory in Type Theory using Quotient Inductive T
 
 ### Structure
 
-- `STLC.Base` gives a higher inductive presentation of a simply typed lambda calculus with a type of natural numbers with a recursor. For now, see the file itself for more detail.
+- `STLC.Base` gives a higher inductive presentation of a simply typed lambda calculus with a unit type.
 
-   Note: If you're wondering why we bother with `apˡ` and `apʳ` in the first place, see `Cubical.HITs.Ints.BiInvInt` and `Cubical.HITs.Ints.IsoInt` in [agda/cubical](https://github.com/agda/cubical).
+- `STLC+N.Base` gives an analgous HIT for simply typed lambda calculus with a natural numbers type and recursor. This is older work that will be returned to once everything is finished in the simpler case above.
+
+   Note: If you're wondering why we bother with `apˡ` and `apʳ` in the first place, see `Cubical.HITs.Ints.BiInvInt` and `Cubical.HITs.Ints.IsoInt` in [agda/cubical](https://github.com/agda/cubical). That being said, this is no longer relevant since `sub` needs a set truncation constructor anyhow.
    
-Currently normalization for STLC is a mess and incomplete.
+Currently normalization for STLC (and STLC+N) is a mess and incomplete.
 
-- `STLC.NormShort` was my first pass at trying to do this directly, and it got very difficult to work with.
+- `STLC+N.NormShort` was my first pass at trying to do this directly, and it got very difficult to work with.
 
-- After doing some research, I began trying normalization by evaluation in `STLC.NormLong` -- inspired by Andras Kovacs' above repository, among others. Finishing up the proofs in this file is ongoing work.
+- After doing some research, I began trying normalization by evaluation in `STLC+N.NormLong` and `STLC.Norm` -- inspired by Andras Kovacs' above repository, among others. Finishing up the proofs in these files is ongoing work.

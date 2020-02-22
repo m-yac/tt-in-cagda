@@ -6,7 +6,7 @@
 -----------------------------------------------------------------
 
 {-# OPTIONS --cubical --safe #-}
-module STLC.NormShort where
+module STLC+N.NormShort where
 
 open import Cubical.Foundations.Prelude renaming (_,_ to <_,_>)
 open import Cubical.Foundations.Function
@@ -67,7 +67,7 @@ decide : (b : Bool) → Maybe (isTrue b)
 decide true = yes tt
 decide false = no
 
-open import STLC.Base
+open import STLC+N.Base
 
 
 
@@ -226,7 +226,7 @@ strengthen (recNat z s n pf) i with strengthen z i | strengthen s (suc (suc i)) 
 -- Normalization
 ------------------
 
-inj : normal τ ⊣ Γ → [ k ] τ ⊣ Γ
+inj : normal τ ⊣ Γ → τ ⊣ Γ
 inj (var i) = var i
 inj (lam x _) = lam (inj x)
 inj (ap y x _) = apˡ (inj y) (inj x)
@@ -235,7 +235,7 @@ inj (suc n) = suc (inj n)
 inj (recNat z s n _) = recNat (inj z) (inj s) (inj n)
 
 
-norm : total τ ⊣ Γ → normal τ ⊣ Γ
+norm : τ ⊣ Γ → normal τ ⊣ Γ
 norm x = {!!}
 
 

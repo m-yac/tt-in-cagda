@@ -1,333 +1,121 @@
-
-----------------------------------------------------------------------------
---
--- A higher inductive type for a simply typed lambda calculus
--- 
--- Inspired by: Type Theory in Type Theory using Quotient Inductive Types
---              by Thorsten Altenkirch and Ambrus Kaposi
--- See: http://www.cs.nott.ac.uk/~psztxa/publ/tt-in-tt.pdf
--- 
-----------------------------------------------------------------------------
-
 {-# OPTIONS --cubical --safe #-}
 module STLC.Base where
 
-open import Cubical.Foundations.Prelude renaming (_,_ to <_,_>)
+open import Cubical.Foundations.Prelude
 open import Cubical.Foundations.Function
-open import Cubical.Foundations.BiInvEquiv
 
-_≡⟨⟩_ : ∀ {ℓ} {A : Type ℓ} {z : A} (x : A) → x ≡ z → x ≡ z
-_ ≡⟨⟩ eq = eq
-infixr 2 _≡⟨⟩_
-
-infixl 6 _,_ _,*_
-infixr 7 _∘*_
-infixr 3 ↑_
+open import STLC.Transformations
 
 
-
------------------
--- Declarations
------------------
-
--- (Total terms are those which step to a value in finite time, while partial terms may not.
---  Thus, the thing which is total/partial here is the evaluation function!)
-data Totality : Type₀ where
-  Total : Totality
-  Partl : Totality
-
-
--- We will mutually inductively define:
-
--- The type of contexts
-data Ctx : Type₀
-
--- The type of transformations / generalized substitutions from a context Γ to Δ
-[_]_~>_ : Totality → Ctx → Ctx → Type₀
-
-total_~>_ : Ctx → Ctx → Type₀
-total_~>_ = [ Total ]_~>_
-_~>_ : Ctx → Ctx → Type₀
-_~>_ = [ Partl ]_~>_
+-----------------------
+-- Types and Contexts
+-----------------------
 
 -- The type of (STLC) types
-data Typ : Type₀
+data Typ : Type₀ where
+  Unit : Typ
+  _⇒_ : Typ → Typ → Typ
 
--- The type of judgements x : τ ⊣ Γ ("x has type τ in context Γ")
-data [_]_⊣_ : Totality → Typ → Ctx → Type₀
-
-total_⊣_ : Typ → Ctx → Type₀
-total_⊣_ = [ Total ]_⊣_
-_⊣_ : Typ → Ctx → Type₀
-_⊣_ = [ Partl ]_⊣_
+-- The type of contexts over Typ
+open Contexts {Typ} public
 
 variable
-  Γ Δ Ε Ζ : Ctx
   τ σ ρ : Typ
-  x y z : τ ⊣ Γ
-  k : Totality
+  Γ Δ Ε Ζ : Ctx
 
 
+------------------------------
+-- Terms and Transformations
+------------------------------
 
----------------------------------
--- Contexts and Transformations
----------------------------------
+-- The type of judgements x : τ ⊣ Γ ("x has type τ in context Γ")
+data _⊣_ : Typ → Ctx → Type₀
 
-data Ctx where
-  ε : Ctx
-  _,_ : Ctx → Typ → Ctx
+-- The type of transfomations Γ ~> Δ between contexts
+open Transformations {Typ} {_⊣_} public
 
-append : Ctx → Ctx → Ctx
-append Γ ε = Γ
-append Γ (Δ , x) = append Γ Δ , x
+id* : Γ ~> Γ
+_∘*_ : (Δ ~> Ε) → (Γ ~> Δ) → Γ ~> Ε
+↑_ : (f : Γ ~> Δ) → (Γ , τ) ~> (Δ , τ)
 
--- A proof that a type is in a context is an index at which it appears
-data _∈_ : Typ → Ctx → Type₀ where
-  zero : τ ∈ (Γ , τ)
-  suc  : τ ∈ Γ → τ ∈ (Γ , σ)
-
-∈-Rec : ∀ {ℓ} (P : ∀ τ Γ → Type ℓ)
-        → (∀ {τ Γ} → P τ (Γ , τ))
-        → (∀ {σ τ Γ} → P τ Γ → P τ (Γ , σ))
-        → ∀ {τ Γ} → τ ∈ Γ → P τ Γ
-∈-Rec P z s zero = z
-∈-Rec P z s (suc i) = s (∈-Rec P z s i)
-
-
--- Transformations Γ ~> Δ are maps from elements of Γ to terms τ ⊣ Δ
-[ k ] Γ ~> Δ = ∀ τ (i : τ ∈ Γ) → ([ k ] τ ⊣ Δ)
-
-~>Ext : {f g : [ k ] Γ ~> Δ} → (∀ τ i → f τ i ≡ g τ i) → f ≡ g
-~>Ext eq j = λ τ i → eq τ i j
-
--- ~> has a list structure on its first argument
-
-ε* : [ k ] ε ~> Δ
-ε* τ ()
-
-_,*_ : ([ k ] Γ ~> Δ) → (x : [ k ] τ ⊣ Δ) → [ k ] (Γ , τ) ~> Δ
-(f ,* x) τ zero = x
-(f ,* x) τ (suc i) = f τ i
-
-head* : ([ k ] (Γ , τ) ~> Δ) → [ k ] τ ⊣ Δ
-head* f = f _ zero
-
-tail* : ([ k ] (Γ , τ) ~> Δ) → [ k ] Γ ~> Δ
-tail* f τ i = f τ (suc i)
-
--- ~> also forms a category (using var and sub from _⊣_, which has yet to be defined)
-
-id* : [ k ] Γ ~> Γ
--- id* τ i = var i
-
-_∘*_ : ([ k ] Δ ~> Ε) → ([ k ] Γ ~> Δ) → [ k ] Γ ~> Ε
--- (g ∘* f) τ i = sub g (f τ i)
-
--- Some useful derived notions:
-
-wkn : [ k ] Γ ~> (Γ , τ)
-wkn = tail* id*
-
-↑_ : (f : [ k ] Γ ~> Δ) → [ k ] (Γ , τ) ~> (Δ , τ)
-↑ f = (wkn ∘* f) ,* head* id*
-
-⟨_⟩ : (x : [ k ] τ ⊣ Γ) → [ k ] (Γ , τ) ~> Γ
-⟨ x ⟩ = id* ,* x
-
-
-
---------------------
--- Typs and Terms
---------------------
-
-data Typ where
-  _⇒_ : Typ → Typ → Typ
-  Nat : Typ
-
--- ...
-unlamʳ unlamˡ : (f : [ k ] (σ ⇒ τ) ⊣ Γ) → [ k ] τ ⊣ (Γ , σ)
--- unlamʳ y = apʳ (sub wkn y) (var zero)
--- unlamˡ y = apˡ (sub wkn y) (var zero)
-
-data [_]_⊣_ where
+data _⊣_ where
 
   -- permit arbitrary substutions on contexts (explicit substitution)
-  sub : (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Γ) → [ k ] τ ⊣ Δ
+  sub : (η : Γ ~> Δ) (x : τ ⊣ Γ) → τ ⊣ Δ
 
   -- sub is a functor on (~>, id*, ∘*)
-  sub-id* : (x : [ k ] τ ⊣ Γ) → sub id* x ≡ x
-  sub-∘*  : (g : [ k ] Δ ~> Ε) (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Γ)
-            → sub (g ∘* f) x ≡ sub g (sub f x)
+  sub-id* : (x : τ ⊣ Γ) → sub id* x ≡ x
+  sub-∘*  : (η : Δ ~> Ε) (ζ : Γ ~> Δ) (x : τ ⊣ Γ)
+            → sub (η ∘* ζ) x ≡ sub η (sub ζ x)
 
   -- variables as de Bruijn indices
-  var : (i : τ ∈ Γ) → [ k ] τ ⊣ Γ
+  var : (i : τ ∈ Γ) → τ ⊣ Γ
+
+  -- unit type intro (elim is free)
+  tt : Unit ⊣ Γ
 
   -- function type intro
-  lam : (x : [ k ] τ ⊣ (Γ , σ)) → [ k ] (σ ⇒ τ) ⊣ Γ
+  lam : (y : τ ⊣ (Γ , σ)) → (σ ⇒ τ) ⊣ Γ
 
-  -- function type elim (left) and β
-  apˡ    : (y : [ k ] (σ ⇒ τ) ⊣ Γ) (z : [ k ] σ ⊣ Γ) → [ k ] τ ⊣ Γ
-  lam-βˡ : (x : [ k ] τ ⊣ (Γ , σ)) (z : [ k ] σ ⊣ Γ) → apˡ (lam x) z ≡ sub ⟨ z ⟩ x
-
-  -- function type elim (right) and η
-  apʳ        : (y : [ k ] (σ ⇒ τ) ⊣ Γ) (z : [ k ] σ ⊣ Γ) → [ k ] τ ⊣ Γ
-  lam-ηʳ     : (y : [ k ] (σ ⇒ τ) ⊣ Γ) → lam (unlamʳ y) ≡ y -- recall that unlamʳ y = apʳ (sub wkn y) (var zero)
-  apʳ-unlamˡ : (y : [ k ] (σ ⇒ τ) ⊣ Γ) (z : [ k ] σ ⊣ Γ) → apʳ y z ≡ sub ⟨ z ⟩ (unlamˡ y)
-
-  -- fix intro and β (not total!)
-  fix   : (y : (τ ⇒ τ) ⊣ Γ) → τ ⊣ Γ
-  fix-β : (y : (τ ⇒ τ) ⊣ Γ) → fix y ≡ apˡ y (fix y)
-
-  -- natural number intro and elim
-  zero : [ k ] Nat ⊣ Γ
-  suc  : (n : [ k ] Nat ⊣ Γ) → [ k ] Nat ⊣ Γ
-  recNat : (z : [ k ] τ ⊣ Γ) (s : [ k ] τ ⊣ (Γ , Nat , τ)) (n : [ k ] Nat ⊣ Γ) → [ k ] τ ⊣ Γ
-
-  -- natural number β
-  recNat-zero : (z : [ k ] τ ⊣ Γ) (s : [ k ] τ ⊣ (Γ , Nat , τ))
-                → recNat z s zero ≡ z
-  recNat-suc  : (z : [ k ] τ ⊣ Γ) (s : [ k ] τ ⊣ (Γ , Nat , τ)) (n : [ k ] Nat ⊣ Γ)
-                → recNat z s (suc n) ≡ sub (id* ,* n ,* recNat z s n) s
+  -- function type elim and uniqueness (the usual elim (ap) is *defined* below)
+  unlam : (f : (σ ⇒ τ) ⊣ Γ) → τ ⊣ (Γ , σ)
+  lam-β : (x : τ ⊣ (Γ , σ)) → unlam (lam x) ≡ x
+  lam-η : (f : (σ ⇒ τ) ⊣ Γ) → lam (unlam f) ≡ f
 
   -- computation rules for substititon
-  sub-var : (f : [ k ] Γ ~> Δ) (i : τ ∈ Γ) → sub f (var i) ≡ f τ i
-  sub-lam : (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ (Γ , σ))
-            → sub f (lam x) ≡ lam (sub (↑ f) x)
+  sub-var : (η : Γ ~> Δ) (i : τ ∈ Γ) → sub η (var i) ≡ η τ i
+  sub-lam : (η : Γ ~> Δ) (x : τ ⊣ (Γ , σ)) → sub η (lam x) ≡ lam (sub (↑ η) x)
   -- sub-ap will be derivable using lam-β and lam-η!
-  sub-zero : (f : [ k ] Γ ~> Δ) → sub f zero ≡ zero
-  sub-suc  : (f : [ k ] Γ ~> Δ) (n : [ k ] Nat ⊣ Γ) → sub f (suc n) ≡ suc (sub f n)
-  sub-recNat : (f : [ k ] Γ ~> Δ) (z : [ k ] τ ⊣ Γ) (s : [ k ] τ ⊣ (Γ , Nat , τ)) (n : [ k ] Nat ⊣ Γ)
-               → sub f (recNat z s n) ≡ recNat (sub f z) (sub (↑ ↑ f) s) (sub f n)
+  sub-tt : (η : Γ ~> Δ) → sub η tt ≡ tt
 
--- Skipped definitions now that everything is is scope:
-id* τ i = var i
-(g ∘* f) τ i = sub g (f τ i)
-unlamˡ y = apˡ (sub wkn y) (var zero)
-unlamʳ y = apʳ (sub wkn y) (var zero)
+  -- set truncation (without this, sub would requires an infinite number of coherences)
+  trunc : isSet (τ ⊣ Γ)
+
+open TransformationProperties {Typ} {_⊣_} {var} {sub} hiding (id*; _∘*_; ↑_) public
+id* = TransformationProperties.id* {Typ} {_⊣_} {var} {sub}
+_∘*_ = TransformationProperties._∘*_ {Typ} {_⊣_} {var} {sub}
+↑_ = TransformationProperties.↑_ {Typ} {_⊣_} {var} {sub}
+
+open MoreProperties sub-id* sub-∘* sub-var public
 
 
+--------------------------------
+-- ap / unlam and Substitution
+--------------------------------
 
----------------------
--- First Properties
----------------------
+-- the usual notion of function elimination
+ap : (f : (σ ⇒ τ) ⊣ Γ) (x : σ ⊣ Γ) → τ ⊣ Γ
+ap f x = sub ⟨ x ⟩ (unlam f)
 
--- the list structure on ~> behaves as one would expect:
+-- the 'missing' substitution rules for unlam and ap
 
-ε*-η : ∀ (f : [ k ] ε ~> Δ) → f ≡ ε*
-ε*-η f = ~>Ext (λ τ ())
+unlam-sub : (η : Γ ~> Δ) (f : (σ ⇒ τ) ⊣ Γ)
+            → unlam (sub η f) ≡ sub (↑ η) (unlam f)
+unlam-sub η f =
+  unlam (sub η f                  ) ≡⟨ cong (unlam ∘ sub _) (sym (lam-η f)) ⟩
+  unlam (sub η (lam (unlam f))    ) ≡⟨ cong unlam (sub-lam η (unlam f)) ⟩
+  unlam (lam (sub (↑ η) (unlam f))) ≡⟨ lam-β (sub (↑ η) (unlam f)) ⟩
+              sub (↑ η) (unlam f)   ∎
 
-,*-η : ∀ (f : [ k ] (Γ , τ) ~> Δ) → (tail* f ,* head* f) ≡ f
-,*-η f = ~>Ext (λ { τ zero    → refl
-                  ; τ (suc i) → refl } )
+sub-ap : (η : Γ ~> Δ) (f : (σ ⇒ τ) ⊣ Γ) (x : σ ⊣ Γ)
+         → sub η (ap f x) ≡ ap (sub η f) (sub η x)
+sub-ap η f x =
+  sub η (sub ⟨ x ⟩ (unlam f))             ≡⟨ sym (sub-∘* η ⟨ x ⟩ (unlam f)) ⟩
+  sub (η ∘* ⟨ x ⟩) (unlam f)              ≡⟨ cong (λ z → sub z (unlam f)) (∘*-,* η id* x) ⟩
+  sub ((η ∘* id*) ,* sub η x) (unlam f)  ≡⟨ cong (λ z → sub (z ,* sub η x) (unlam f)) (id*-r η) ⟩
+  sub (η ,* sub η x) (unlam f)           ≡⟨ cong (λ z → sub z (unlam f)) (sym (⟨⟩-↑ (sub η x) η)) ⟩
+  sub (⟨ sub η x ⟩ ∘* (↑ η)) (unlam f)    ≡⟨ sub-∘* (id* ,* (sub η x)) (↑ η) (unlam f) ⟩
+  sub ⟨ sub η x ⟩ (sub (↑ η) (unlam f))   ≡⟨ cong (sub (id* ,* (sub η x))) (sym (unlam-sub η f)) ⟩
+  sub ⟨ sub η x ⟩ (unlam (sub η f))       ∎
 
-head*-,* : ∀ (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Δ) → head* (f ,* x) ≡ x
-head*-,* f x = refl
 
-tail*-,* : ∀ (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Δ) → tail* (f ,* x) ≡ f
-tail*-,* f x = ~>Ext (λ τ i → refl)
+----------------
+-- Other Facts
+----------------
 
--- _,*_ is a natural transformation
-
-∘*-,* : ∀ (g : [ k ] Δ ~> Ε) (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Δ)
-        → g ∘* (f ,* x) ≡ (g ∘* f) ,* (sub g x)
-∘*-,* g f x = ~>Ext (λ { τ zero    → refl
-                       ; τ (suc i) → refl } )
-
--- the categorial structure on ~> behaves as one would expect -- using the sub laws from _⊣_!
-
-id*-l : ∀ (f : [ k ] Γ ~> Δ) → id* ∘* f ≡ f
-id*-l f = ~>Ext (λ τ i → sub-id* (f τ i))
-
-id*-r : ∀ (f : [ k ] Γ ~> Δ) → f ∘* id* ≡ f
-id*-r f = ~>Ext (λ τ i → sub-var f i)
-
-∘*-assoc : ∀ (h : [ k ] Ε ~> Ζ) (g : [ k ] Δ ~> Ε) (f : [ k ] Γ ~> Δ)
-           → (h ∘* g) ∘* f ≡ h ∘* (g ∘* f)
-∘*-assoc h g f = ~>Ext (λ τ i → sub-∘* h g (f τ i))
-
--- Some more facts:
-
-,*-wkn : ∀ (f : [ k ] Γ ~> Δ) (x : [ k ] τ ⊣ Δ) → (f ,* x) ∘* wkn ≡ f
-,*-wkn f x = ~>Ext (λ τ i → sub-var (f ,* x) (suc i))
-
-⟨⟩-↑ : ∀ (x : [ k ] τ ⊣ Δ) (f : [ k ] Γ ~> Δ) → ⟨ x ⟩ ∘* (↑ f) ≡ f ,* x
-⟨⟩-↑ x f =  (id* ,* x) ∘* ((wkn ∘* f) ,* var zero)                  ≡⟨ ∘*-,* (id* ,* x) (wkn ∘* f) (var zero) ⟩
-          ((id* ,* x) ∘* (wkn ∘* f)) ,* sub (id* ,* x) (var zero)  ≡⟨ cong (((id* ,* x) ∘* (wkn ∘* f)) ,*_) (sub-var (id* ,* x) zero) ⟩
-          ((id* ,* x) ∘* (wkn ∘* f)) ,* x                          ≡⟨ cong (_,* x) (sym (∘*-assoc (id* ,* x) wkn f)) ⟩
-          (((id* ,* x) ∘* wkn) ∘* f) ,* x                          ≡⟨ cong (λ z → (z ∘* f) ,* x) (,*-wkn id* (x)) ⟩
-                          (id* ∘* f) ,* x                          ≡⟨ cong (_,* x) (id*-l f) ⟩
-                                   f ,* x                          ∎
-
--- Variables can be expressed entirely in terms of head*, tail*, id*! (recall head* id* ≡ var zero, tail* id* ≡ wkn)
--- In particular: var i ≡ sub (wkn ∘* ... ∘* wkn) (var zero)
+-- Variables can be expressed entirely in terms of head*, tail*, and id*.
+-- Since head* id* ≡ var zero and tail* id* ≡ wkn, this is expressing the fact that:
+--   var i ≡ sub (wkn ∘* ... ∘* wkn) (var zero)
 var-≡ : ∀ {τ Γ} (i : τ ∈ Γ) → var i ≡ (∈-Rec _⊣_ (head* id*) (sub (tail* id*)) i)
 var-≡ zero = refl
 var-≡ (suc i) = (sym (sub-var wkn i)) ∙ (cong (sub (tail* id*)) (var-≡ i))
-
-
-
---------------------------------------
--- apˡ vs. apʳ vs. unlamʳ vs. unlamˡ
---------------------------------------
-
--- The goal of this section is to show that apˡ ≡ apʳ! We start with some equalities:
-
--- using lam-βˡ, we can derive an equality for apˡ analgous to apʳ-unlamˡ
-apˡ-unlamʳ : (y : [ k ] (σ ⇒ τ) ⊣ Γ) (z : [ k ] σ ⊣ Γ) → apˡ y z ≡ sub ⟨ z ⟩ (unlamʳ y)
-apˡ-unlamʳ y z =
-  apˡ y z                   ≡⟨ cong (λ x → apˡ x z) (sym (lam-ηʳ y)) ⟩
-  apˡ (lam (unlamʳ y)) z    ≡⟨ lam-βˡ (unlamʳ y) z ⟩
-  sub ⟨ z ⟩ (unlamʳ y) ∎
-
--- we can also derive an equality for unlamˡ analgous to to lam-ηʳ
-unlam-βˡ : (x : [ k ] τ ⊣ (Γ , σ)) → unlamˡ (lam x) ≡ x
-unlam-βˡ x = 
-  apˡ (sub wkn (lam x)) (var zero)      ≡⟨ cong (λ z → apˡ z (var zero)) (sub-lam wkn x) ⟩
-  apˡ (lam (sub (↑ wkn) x)) (var zero)  ≡⟨ lam-βˡ _ (var zero) ⟩
-  sub ⟨ var zero ⟩ (sub (↑ wkn) x)       ≡⟨ sym (sub-∘* ⟨ var zero ⟩ (↑ wkn) x) ⟩
-  sub (⟨ var zero ⟩ ∘* (↑ wkn)) x        ≡⟨ cong (λ z → sub z x) (⟨⟩-↑ (var zero) wkn) ⟩
-  sub (wkn ,* var zero) x               ≡⟨ cong (λ z → sub z x) (,*-η id*) ⟩
-  sub id* x                             ≡⟨ sub-id* x ⟩
-  x                                     ∎
-
--- perhaps a more apt name:
-unlam-ηʳ : (x : [ k ] (σ ⇒ τ) ⊣ Γ) → lam (unlamʳ x) ≡ x
-unlam-ηʳ = lam-ηʳ
-
-
--- lam with unlamˡ and unlamʳ define a bi-invertible equivalence:
-lam-biinvequiv : BiInvEquiv ([ k ] τ ⊣ (Γ , σ)) ([ k ] (σ ⇒ τ) ⊣ Γ)
-lam-biinvequiv = record { fun = lam ; invr = unlamʳ ; invr-rightInv = unlam-ηʳ
-                                    ; invl = unlamˡ ; invl-leftInv  = unlam-βˡ }
-
--- ...thus:
-unlam-uniq : ∀ (y : [ k ] (σ ⇒ τ) ⊣ Γ) → unlamʳ y ≡ unlamˡ y
-unlam-uniq = BiInvEquiv.invr≡invl lam-biinvequiv
-
--- ...and therefore our ap's are indistinguishable!
-ap-uniq : ∀ (y : [ k ] (σ ⇒ τ) ⊣ Γ) (z : [ k ] σ ⊣ Γ) → apˡ y z ≡ apʳ y z
-ap-uniq y z = apˡ-unlamʳ y z ∙ cong (sub ⟨ z ⟩) (unlam-uniq y) ∙ sym (apʳ-unlamˡ y z)
-
--- We can also derive substitution rules for unlam and ap:
-
-unlam-sub : (f : [ k ] Γ ~> Δ) (y : [ k ] (σ ⇒ τ) ⊣ Γ)
-            → sub (↑ f) (unlamʳ y) ≡ unlamˡ (sub f y)
-unlam-sub {σ} f y =
-               sub (↑ f) (unlamʳ y)    ≡⟨ sym (unlam-βˡ _) ⟩
-  unlamˡ (lam (sub (↑ f) (unlamʳ y)))  ≡⟨ cong unlamˡ (sym (sub-lam f (unlamʳ y))) ⟩
-  unlamˡ (sub f (lam (unlamʳ y))    )  ≡⟨ cong (unlamˡ ∘ sub f) (unlam-ηʳ y) ⟩
-  unlamˡ (sub f y                   )  ∎
-
-ap-sub : (f : [ k ] Γ ~> Δ) (y : [ k ] (σ ⇒ τ) ⊣ Γ) (z : [ k ] σ ⊣ Γ)
-         → sub f (apˡ y z) ≡ apʳ (sub f y) (sub f z)
-ap-sub f y z =
-  sub f (apˡ y z)                         ≡⟨ cong (sub f) (apˡ-unlamʳ y z) ⟩
-  sub f (sub ⟨ z ⟩ (unlamʳ y))             ≡⟨ sym (sub-∘* f ⟨ z ⟩ (unlamʳ y)) ⟩
-  sub (f ∘* ⟨ z ⟩) (unlamʳ y)              ≡⟨ cong (λ x → sub x (unlamʳ y)) (∘*-,* f id* z) ⟩
-  sub ((f ∘* id*) ,* sub f z) (unlamʳ y)  ≡⟨ cong (λ x → sub (x ,* sub f z) (unlamʳ y)) (id*-r f) ⟩
-  sub (f ,* sub f z) (unlamʳ y)           ≡⟨ cong (λ x → sub x (unlamʳ y)) (sym (⟨⟩-↑ (sub f z) f)) ⟩
-  sub (⟨ sub f z ⟩ ∘* (↑ f)) (unlamʳ y)    ≡⟨ sub-∘* (id* ,* (sub f z)) (↑ f) (unlamʳ y) ⟩
-  sub ⟨ sub f z ⟩ (sub (↑ f) (unlamʳ y))   ≡⟨ cong (sub (id* ,* (sub f z))) (unlam-sub f y) ⟩
-  sub ⟨ sub f z ⟩ (unlamˡ (sub f y))       ≡⟨ sym (apʳ-unlamˡ (sub f y) (sub f z)) ⟩
-  apʳ (sub f y) (sub f z)                 ∎
-
